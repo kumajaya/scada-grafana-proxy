@@ -1,0 +1,15 @@
+# /etc/systemd/system/scada-grafana-proxy.service
+[Unit]
+Description=Grafana Proxy for Rapid SCADA
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/scada-grafana-proxy/server.js
+WorkingDirectory=/opt/scada-grafana-proxy/
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
