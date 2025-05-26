@@ -66,6 +66,36 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
   }
 });
 
+router.post('/api/trends/query', async (req, res) => {
+  // Body dari Grafana langsung diteruskan ke plugin
+  const url = `${config.scada5.baseUrl}/api/trends/query`;
+
+  try {
+    const response = await axios.post(url, req.body, {
+      headers: {
+        Accept: 'application/json;charset=utf-8',
+        'User-Agent': 'Mozilla/5.0',
+      }
+    });
+
+    let data = response.data;
+
+    if (isTimeSeriesFormat(data)) {
+      data = transformToFlat(data);
+    } else if (!isFlatFormat(data)) {
+      return res.status(400).json({ error: '[ROUTER] Unknown data format from upstream' });
+    }
+
+    return res.json(data);
+
+  } catch (error) {
+    res.status((error && error.response && error.response.status) || 500).json({
+      message: '[ROUTER] Error forwarding request to SCADA 5',
+      details: (error && error.response && error.response.data) || error.message,
+    });
+  }
+});
+
 router.get('/health', (req, res) => res.send('SCADA Grafana Proxy is running'));
 
 function transformSCADAResponse(response) {
@@ -84,8 +114,36 @@ function transformSCADAResponse(response) {
       channel,
       value: item?.d?.val ?? null,
     }));
-});
+  });
+}
 
+// Fungsi deteksi dan transformasi format
+function isTimeSeriesFormat(data) {
+  return Array.isArray(data) && data.length > 0 && data[0].datapoints;
+}
+
+function isFlatFormat(data) {
+  return Array.isArray(data) && typeof data[0] === 'object' && 'timestamp' in data[0] && 'value' in data[0] && 'target' in data[0];
+}
+
+function transformToFlat(data) {
+  // Transformasi dari timeseries ke flat array of objects
+  const transformed = [];
+  for (let i = 0; i < data.length; i++) {
+    const series = data[i];
+    if (!series.datapoints) continue;
+    const target = series.target;
+    const datapoints = series.datapoints;
+    for (let j = 0; j < datapoints.length; j++) {
+      const dp = datapoints[j];
+      transformed.push({
+        timestamp: dp[1],
+        value: dp[0],
+        target: target
+      });
+    }
+  }
+  return transformed;
 }
 
 module.exports = router;

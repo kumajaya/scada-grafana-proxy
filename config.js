@@ -11,4 +11,7 @@ module.exports = {
     username: process.env.SCADA_USERNAME || 'scada',
     password: process.env.SCADA_PASSWORD || 'secret',
   },
+  scada5: {
+    baseUrl: process.env.SCADA5_BASE_URL || 'http://localhost/grafanadataprovider',
+  },
 };
