@@ -9,6 +9,22 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
     return res.status(400).json({ message: '[ROUTER] Missing required query parameters' });
   }
 
+  if (!req.query.archiveBit) {
+    // Set archiveBit berdasarkan startTime dan endTime
+    const timeDiff = new Date(req.query.endTime) - new Date(req.query.startTime);
+    const hoursDiff = timeDiff / (1000 * 60 * 60);
+    req.query.archiveBit = hoursDiff <= config.scada.archiveBit ? 1 : 2;
+  }
+
+  if (!req.query.endInclusive) {
+    // Defaultkan endInclusive ke true jika tidak ada
+    req.query.endInclusive = true;
+  }
+
+  // Rekontruksi query object dengan archiveBit di index 0
+  const { startTime, endTime, endInclusive, cnlNums } = req.query;
+  const reorderedQuery = { archiveBit: req.query.archiveBit, startTime, endTime, endInclusive, cnlNums };
+
   const url = `${config.scada.baseUrl}/Api/Main/GetHistData`;
 
   try {
@@ -21,10 +37,10 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
         Cookie: cookies.join('; '),
         'User-Agent': 'Mozilla/5.0',
       },
-      params: req.query,
+      params: reorderedQuery,
     });
 
-    console.log('[ROUTER] Fetching data from SCADA with params:', req.query);
+    console.log('[ROUTER] Fetching data from SCADA with params:', reorderedQuery);
     try {
       const transformed = transformSCADAResponse(response);
       return res.json(transformed);
@@ -47,7 +63,7 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
             Cookie: cookies.join('; '),
             'User-Agent': 'Mozilla/5.0',
           },
-          params: req.query,
+          params: reorderedQuery,
         });
 
         return res.json(transformSCADAResponse(retryResponse));

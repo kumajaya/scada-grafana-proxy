@@ -4,4 +4,5 @@ PROXY_PASS=secret
 SCADA_BASE_URL=http://localhost:10008
 SCADA_USERNAME=admin
 SCADA_PASSWORD=secret
+SCADA_ARCHIVEBIT_THRESHOLD=24
 SCADA5_BASE_URL=http://localhost/grafanadataprovider

@@ -10,6 +10,7 @@ module.exports = {
     baseUrl: process.env.SCADA_BASE_URL || 'http://localhost:10008',
     username: process.env.SCADA_USERNAME || 'scada',
     password: process.env.SCADA_PASSWORD || 'secret',
+    archiveBit: process.env.SCADA_ARCHIVEBIT_THRESHOLD || 24,
   },
   scada5: {
     baseUrl: process.env.SCADA5_BASE_URL || 'http://localhost/grafanadataprovider',
