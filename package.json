@@ -9,7 +9,7 @@
   "author": "Ketut Kumajaya",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^0.27.2",
     "basic-auth": "^2.0.1",
     "body-parser": "^1.20.2",
     "dotenv": "^16.4.5",

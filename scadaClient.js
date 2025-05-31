@@ -25,8 +25,8 @@ async function login() {
       throw new Error('[CLIENT] No set-cookie header received from SCADA.');
     }
 
-    if (response.data?.success === false) {
-      throw new Error('[CLIENT] SCADA login failed: ' + (response.data?.message || 'Unknown error'));
+    if (response.data && response.data.success === false) {
+      throw new Error('[CLIENT] SCADA login failed: ' + ((response.data && response.data.message) || 'Unknown error'));
     }
 
     cookieJar = setCookieHeaders.map(cookie => cookie.split(';')[0]);

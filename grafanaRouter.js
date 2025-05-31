@@ -57,7 +57,8 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
       });
     }
   } catch (error) {
-    if (error.response?.status === 401) {
+    // Pastikan error.response aman diakses
+    if (error && error.response && error.response.status === 401) {
       console.warn(`[ROUTER] Session expired. Re-authenticating...`);
       await forceLogin();
       const cookies = getSessionCookies();
@@ -79,33 +80,44 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
         }
         return res.json(transformed);
       } catch (retryError) {
-        return res.status(retryError.response?.status || 500).json({
+        return res.status(
+          (retryError && retryError.response && retryError.response.status) || 500
+        ).json({
           message: '[ROUTER] Error after retrying login',
-          details: retryError.response?.data || retryError.message,
+          details:
+            (retryError && retryError.response && retryError.response.data) ||
+            retryError.message ||
+            retryError.toString(),
         });
       }
     }
 
-    res.status(error.response?.status || 500).json({
+    // Tangani error lain (misal error jaringan)
+    res.status(
+      (error && error.response && error.response.status) || 500
+    ).json({
       message: '[ROUTER] Error forwarding request to SCADA',
-      details: error.response?.data || error.message,
+      details:
+        (error && error.response && error.response.data) ||
+        error.message ||
+        error.toString(),
     });
   }
 });
 
 router.post('/api/trends/query', async (req, res) => {
   // Body dari Grafana langsung diteruskan ke plugin
-  const url = `${config.scada5.baseUrl}/api/trends/query`;
+  var url = config.scada5.baseUrl + '/api/trends/query';
 
   try {
-    const response = await axios.post(url, req.body, {
+    var response = await axios.post(url, req.body, {
       headers: {
         Accept: 'application/json;charset=utf-8',
-        'User-Agent': 'Mozilla/5.0',
+        'User-Agent': 'Mozilla/5.0'
       }
     });
 
-    let data = response.data;
+    var data = response.data;
 
     if (isTimeSeriesFormat(data)) {
       data = transformToFlat(data);
@@ -126,22 +138,33 @@ router.post('/api/trends/query', async (req, res) => {
 router.get('/health', (req, res) => res.send('SCADA Grafana Proxy is running'));
 
 function transformSCADAResponse(response) {
-  const { data } = response;
-  if (!data?.data?.timestamps || !data?.data?.trends || !data?.data?.cnlNums) {
+  var data = response.data;
+  if (
+    !data ||
+    !data.data ||
+    !data.data.timestamps ||
+    !data.data.trends ||
+    !data.data.cnlNums
+  ) {
     console.error('[ROUTER] SCADA response format invalid:', data);
     throw new Error('[ROUTER] Invalid SCADA response format');
   }
 
-  const timestamps = data.data.timestamps.map(ts => ts.ms);
+  var timestamps = data.data.timestamps.map(function(ts) { return ts.ms; });
 
-  return (data.data.trends || []).flatMap((trendValues, index) => {
-    const channel = data.data.cnlNums?.[index] ?? null;
-    return (trendValues || []).map((item, i) => ({
-      timestamp: timestamps?.[i] ?? null,
-      channel,
-      value: item?.d?.val ?? null,
-    }));
-  });
+  return (data.data.trends || []).reduce(function(acc, trendValues, index) {
+    var channel = data.data.cnlNums && data.data.cnlNums[index] !== undefined
+      ? data.data.cnlNums[index]
+      : null;
+    var mapped = (trendValues || []).map(function(item, i) {
+      return {
+        timestamp: timestamps && timestamps[i] !== undefined ? timestamps[i] : null,
+        channel: channel,
+        value: item && item.d && item.d.val !== undefined ? item.d.val : null,
+      };
+    });
+    return acc.concat(mapped);
+  }, []);
 }
 
 // Fungsi transformasi totalizer ke flowrate
@@ -235,27 +258,30 @@ function isTimeSeriesFormat(data) {
 }
 
 function isFlatFormat(data) {
-  return Array.isArray(data) && typeof data[0] === 'object' && 'timestamp' in data[0] && 'value' in data[0] && 'target' in data[0];
+  return Array.isArray(data) &&
+    typeof data[0] === 'object' &&
+    data[0].hasOwnProperty('timestamp') &&
+    data[0].hasOwnProperty('value') &&
+    data[0].hasOwnProperty('target');
 }
 
 function transformToFlat(data) {
   // Transformasi dari timeseries ke flat array of objects
-  const transformed = [];
-  for (let i = 0; i < data.length; i++) {
-    const series = data[i];
+  var transformed = [];
+  for (var i = 0; i < data.length; i++) {
+    var series = data[i];
     if (!series.datapoints) continue;
-    const target = series.target;
-    const datapoints = series.datapoints;
-    for (let j = 0; j < datapoints.length; j++) {
-      const dp = datapoints[j];
+    for (var j = 0; j < series.datapoints.length; j++) {
+      var dp = series.datapoints[j];
       transformed.push({
         timestamp: dp[1],
         value: dp[0],
-        target: target
+        target: series.target
       });
     }
   }
   return transformed;
 }
+
 
 module.exports = router;
