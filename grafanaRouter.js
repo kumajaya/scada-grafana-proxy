@@ -5,6 +5,8 @@ const config = require('./config');
 const { getSessionCookies, ensureLogin, forceLogin } = require('./scadaClient');
 
 router.get('/Api/Main/GetHistData', async (req, res) => {
+  const applyTotalizerTransform = req.query.transform === 'true'; // Hanya jika string "true" yang masuk
+
   if (!req.query || !req.query.cnlNums || !req.query.startTime || !req.query.endTime) {
     return res.status(400).json({ message: '[ROUTER] Missing required query parameters' });
   }
@@ -42,7 +44,11 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
 
     console.log('[ROUTER] Fetching data from SCADA with params:', reorderedQuery);
     try {
-      const transformed = transformSCADAResponse(response);
+      let transformed = transformSCADAResponse(response);
+      // Terapkan transformasi flowrate jika diminta
+      if (applyTotalizerTransform) {
+        transformed = transformTotalizer(transformed);
+      }
       return res.json(transformed);
     } catch (transformError) {
       return res.status(500).json({
@@ -66,7 +72,12 @@ router.get('/Api/Main/GetHistData', async (req, res) => {
           params: reorderedQuery,
         });
 
-        return res.json(transformSCADAResponse(retryResponse));
+        let transformed = transformSCADAResponse(retryResponse);
+        // Terapkan transformasi flowrate jika diminta
+        if (applyTotalizerTransform) {
+          transformed = transformTotalizer(transformed);
+        }
+        return res.json(transformed);
       } catch (retryError) {
         return res.status(retryError.response?.status || 500).json({
           message: '[ROUTER] Error after retrying login',
@@ -131,6 +142,91 @@ function transformSCADAResponse(response) {
       value: item?.d?.val ?? null,
     }));
   });
+}
+
+// Fungsi transformasi totalizer ke flowrate
+function transformTotalizer(data) {
+  if (!Array.isArray(data) || data.length === 0) {
+    console.warn("[ROUTER] Invalid input data for totalizer transformation");
+    return [];
+  }
+
+  // Kelompokkan data berdasarkan 'channel'
+  const groupedByChannel = {};
+  const channelOrder = []; // Array untuk melacak urutan channel
+  data.forEach(item => {
+    // Pastikan item dan channel-nya valid sebelum dikelompokkan
+    if (item && item.channel !== undefined && item.channel !== null) {
+      if (!groupedByChannel[item.channel]) {
+        groupedByChannel[item.channel] = [];
+        channelOrder.push(item.channel); // Tambahkan channel ke urutan
+      }
+      groupedByChannel[item.channel].push(item);
+    }
+  });
+
+  let allTransformedResults = [];
+
+  // Iterasi setiap kelompok channel dan terapkan logika totalizer
+  for (const channelKey of channelOrder) {
+    const channelData = groupedByChannel[channelKey];
+
+    // Pastikan data dalam channel terurut berdasarkan timestamp
+    channelData.sort((a, b) => a.timestamp - b.timestamp);
+
+    const transformedChannelData = channelData.map((currentItem, index, array) => {
+      // Lewati elemen pertama karena tidak ada nilai sebelumnya sebagai pengurang
+      if (index === 0) {
+        return null; // Akan difilter nanti
+      }
+
+      const previousItem = array[index - 1];
+
+      // Pemeriksaan untuk null/undefined pada properti
+      if (currentItem.value === null || currentItem.value === undefined ||
+          previousItem.value === null || previousItem.value === undefined) {
+        return null;
+      }
+
+      const timestampDiffMs = currentItem.timestamp - previousItem.timestamp;
+      // 3600000 milidetik = 1 jam
+      const timestampDiffHours = timestampDiffMs / 3600000;
+
+      let valueDiff;
+
+      // Jika salah satu nilai nol, valueDiff menjadi nol
+      if (currentItem.value === 0 || previousItem.value === 0) {
+        valueDiff = 0;
+      } else {
+        valueDiff = currentItem.value - previousItem.value;
+        // Pastikan valueDiff tidak negatif
+        if (valueDiff < 0) {
+          valueDiff = 0;
+        }
+      }
+
+      // Pastikan timestampDiffMs tidak nol untuk menghindari pembagian dengan nol
+      let calculatedValue = 0;
+      if (timestampDiffHours !== 0) {
+        calculatedValue = valueDiff / timestampDiffHours;
+      }
+      // Jika timestampDiffHours adalah 0 (misalnya, dua entri data memiliki timestamp yang sama),
+      // atau jika timestampDiffHours adalah NaN (karena timestamp asli null/undefined),
+      // maka calculatedValue akan tetap 0.
+
+      return {
+        timestamp: currentItem.timestamp,
+        channel: currentItem.channel,
+        value: calculatedValue
+      };
+    }).filter(item => item !== null); // Filter elemen null dari hasil map setiap channel
+
+    // Gabungkan hasil transformasi dari channel ini ke dalam array hasil keseluruhan
+    allTransformedResults = allTransformedResults.concat(transformedChannelData);
+  }
+
+  // Kembalikan semua hasil yang sudah digabungkan dari semua channel
+  return allTransformedResults;
 }
 
 // Fungsi deteksi dan transformasi format
