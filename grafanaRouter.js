@@ -101,6 +101,8 @@ router.post('/api/trends/query', async (req, res) => {
   // Body dari Grafana langsung diteruskan ke plugin
   const url = `${config.scada5.baseUrl}/api/trends/query`;
 
+  const applyTotalizerTransform = req.body.transform === true; // Hanya jika boolean true yang masuk
+
   try {
     const response = await axios.post(url, req.body, {
       headers: {
@@ -115,6 +117,12 @@ router.post('/api/trends/query', async (req, res) => {
       data = transformToFlat(data);
     } else if (!isFlatFormat(data)) {
       return res.status(400).json({ error: '[ROUTER] Unknown data format from upstream' });
+    }
+
+    // Terapkan transformasi totalizer jika diminta
+    if (applyTotalizerTransform) {
+      console.log('[ROUTER] Applying totalizer transformation');
+      data = transformTotalizer(data);
     }
 
     return res.json(data);
@@ -255,7 +263,8 @@ function transformToFlat(data) {
       transformed.push({
         timestamp: dp[1],
         value: dp[0],
-        target: target
+        target: target,
+        channel: target // Untuk kompatibilitas dengan transformTotalizer
       });
     }
   }
