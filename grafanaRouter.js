@@ -1,8 +1,12 @@
 const express = require('express');
+const compression = require('compression');
 const axios = require('axios');
 const router = express.Router();
 const config = require('./config');
 const { getSessionCookies, ensureLogin, forceLogin } = require('./scadaClient');
+
+// Terapkan compression untuk seluruh route di router ini
+router.use(compression());
 
 router.get('/Api/Main/GetHistData', async (req, res) => {
   const applyTotalizerTransform = req.query.transform === 'true'; // Hanya jika string "true" yang masuk
