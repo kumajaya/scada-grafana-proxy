@@ -137,6 +137,8 @@ router.post('/api/trends/query', async (req, res) => {
 
 router.get('/health', (req, res) => res.send('SCADA Grafana Proxy is running'));
 
+router.get('/ping', (req, res) => {res.status(200).send('pong');});
+
 function transformSCADAResponse(response) {
   const { data } = response;
   if (!data?.data?.timestamps || !data?.data?.trends || !data?.data?.cnlNums) {
